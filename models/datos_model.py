@@ -1,15 +1,3 @@
-# models/datos_model.py
-# ---------------------------------------------------------------
-# MODELO (la "M" de MVC)
-#
-# Aquí está todo lo que tiene que ver con SQL Server:
-#   - abrir la conexión con pyodbc
-#   - guardar los registros que llegan de la API (sin duplicar)
-#   - hacer los SELECT que necesita la página (tabla, filtros y resumen)
-#
-# El modelo NO arma páginas web ni sabe nada de Flask. Solo recibe
-# datos, habla con la base de datos y devuelve listas/diccionarios.
-# ---------------------------------------------------------------
 
 import hashlib
 import json
@@ -24,15 +12,8 @@ load_dotenv()
 # Nombre de la tabla en un solo lugar, por si toca cambiarlo
 TABLA = "dbo.HurtosVehiculos"
 
-# Columnas que se pueden usar para llenar las listas desplegables.
-# Se usa una "lista blanca" porque el nombre de una columna no se puede
-# pasar como parámetro (?) y no queremos meter texto del usuario en el SQL.
 COLUMNAS_PERMITIDAS = ("tipo_hurto", "genero", "departamento", "grupo_etario")
 
-
-# ===============================================================
-# 1. CONEXIÓN
-# ===============================================================
 
 def obtener_conexion():
     """Abre y devuelve una conexión a SQL Server usando los datos del .env."""
@@ -42,7 +23,7 @@ def obtener_conexion():
     trusted = os.getenv("DB_TRUSTED", "yes").lower() == "yes"
 
     if trusted:
-        # Autenticación de Windows (la que usamos en los PC del equipo)
+       
         cadena = (
             f"DRIVER={{{driver}}};"
             f"SERVER={servidor};"
@@ -51,7 +32,7 @@ def obtener_conexion():
             "TrustServerCertificate=yes;"
         )
     else:
-        # Autenticación de SQL Server (usuario y contraseña)
+        
         usuario = os.getenv("DB_USER")
         clave = os.getenv("DB_PASSWORD")
         cadena = (
@@ -62,14 +43,11 @@ def obtener_conexion():
             "TrustServerCertificate=yes;"
         )
 
-    # TrustServerCertificate=yes sirve para practicar en local.
-    # En un servidor real habría que configurar bien el certificado.
+   
     return pyodbc.connect(cadena)
 
 
-# ===============================================================
-# 2. FUNCIONES DE APOYO PARA LIMPIAR LOS DATOS DE LA API
-# ===============================================================
+
 
 def convertir_fecha(texto):
     """
@@ -80,8 +58,7 @@ def convertir_fecha(texto):
     if not texto:
         return None
 
-    # Probamos el formato que vimos en el JSON y, por si acaso, el formato
-    # ISO que usan otros datasets de Socrata.
+   
     formatos = ("%d/%m/%Y", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d")
     for formato in formatos:
         try:
@@ -118,10 +95,6 @@ def generar_id_api(registro):
     return "hash-" + hashlib.sha1(texto.encode("utf-8")).hexdigest()
 
 
-# ===============================================================
-# 3. GUARDAR (carga / sincronización desde la API)
-# ===============================================================
-
 def guardar_registros(registros):
     """
     Recorre la lista que devolvió la API y guarda en SQL Server solo los
@@ -148,9 +121,7 @@ def guardar_registros(registros):
                 repetidos += 1
                 continue
 
-            # Paso 2: si no existe, lo insertamos.
-            # Usamos ? (parámetros) en vez de concatenar texto, así se evita
-            # la inyección SQL aunque los datos vengan de afuera.
+        
             cursor.execute(
                 f"""
                 INSERT INTO {TABLA}
@@ -173,12 +144,12 @@ def guardar_registros(registros):
             )
             nuevos += 1
 
-        # Si todo salió bien, confirmamos los cambios
+        
         conexion.commit()
         return {"recibidos": len(registros), "nuevos": nuevos, "repetidos": repetidos}
 
     except Exception:
-        # Si algo falla, deshacemos todo lo de esta sincronización
+       
         conexion.rollback()
         raise
 
@@ -188,9 +159,6 @@ def guardar_registros(registros):
         conexion.close()
 
 
-# ===============================================================
-# 4. CONSULTAR (lo que muestra la página web)
-# ===============================================================
 
 def _armar_filtros(texto="", tipo="", genero=""):
     """
@@ -203,8 +171,7 @@ def _armar_filtros(texto="", tipo="", genero=""):
     parametros = []
 
     if texto:
-        # COLLATE ..._CI_AI hace que no importen mayúsculas ni tildes:
-        # "bogota" encuentra "Bogotá D.C." y "medellin" encuentra "Medellín".
+        
         condiciones.append(
             "(departamento COLLATE Latin1_General_CI_AI LIKE ? "
             "OR municipio COLLATE Latin1_General_CI_AI LIKE ?)"
@@ -279,7 +246,6 @@ def obtener_resumen(texto="", tipo="", genero=""):
         )
         resumen = _a_diccionarios(cursor)[0]
 
-        # Vehículos hurtados por tipo (motos vs automotores)
         cursor.execute(
             f"""
             SELECT tipo_hurto, SUM(cantidad) AS vehiculos
@@ -292,7 +258,7 @@ def obtener_resumen(texto="", tipo="", genero=""):
         )
         resumen["por_tipo"] = _a_diccionarios(cursor)
 
-        # Los 5 departamentos con más vehículos hurtados
+        
         cursor.execute(
             f"""
             SELECT TOP 5 departamento, SUM(cantidad) AS vehiculos
